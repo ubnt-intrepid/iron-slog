@@ -3,9 +3,47 @@ extern crate slog;
 extern crate chrono;
 extern crate iron;
 
-use iron::{Request, Response, IronResult, IronError, Handler, typemap};
+use std::fmt;
+use iron::{Request, Response, IronResult, Handler};
 use slog::Logger;
-use chrono::DateTime;
+use chrono::{DateTime, Local};
+
+
+fn timestamp_msec(t: &chrono::DateTime<chrono::Local>) -> f64 {
+    t.timestamp() as f64 * 1000f64 + t.timestamp_subsec_millis() as f64
+}
+
+fn calc_elapsed_ms(start: &DateTime<Local>, end: &DateTime<Local>) -> f64 {
+    let start_timestamp = timestamp_msec(start);
+    let end_timestamp = timestamp_msec(end);
+    end_timestamp - start_timestamp
+}
+
+
+struct FormatContext<'req, 'res, 'a: 'req, 'b: 'a> {
+    req: &'req Request<'a, 'b>,
+    res: &'res Response,
+    start_time: DateTime<Local>,
+    end_time: DateTime<Local>,
+}
+
+impl<'req, 'res, 'a: 'req, 'b: 'a> fmt::Display for FormatContext<'req, 'res, 'a, 'b> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let response_time = calc_elapsed_ms(&self.start_time, &self.end_time);
+        let status = self.res
+                         .status
+                         .map(|s| format!("{}", s))
+                         .unwrap_or("<missing status code>".to_string());
+        write!(f,
+               "{} {} {} ms ({}), {} {}",
+               self.req.method,
+               self.req.url,
+               status,
+               response_time,
+               self.req.remote_addr,
+               self.start_time.format("%Y-%m-%dT%H:%M:%S.%fZ%z"))
+    }
+}
 
 
 pub struct LoggerMiddleware<H: Handler> {
@@ -18,45 +56,30 @@ impl<H: Handler> LoggerMiddleware<H> {
         LoggerMiddleware { handler, logger }
     }
 
-    fn log(&self, start_time: DateTime<chrono::Local>, req: &mut Request, res: &Response) {
-        let end_time: DateTime<chrono::Local> = chrono::Local::now();
-        fn timestamp_msec(t: &chrono::DateTime<chrono::Local>) -> f64 {
-            t.timestamp() as f64 * 1000f64 + t.timestamp_subsec_millis() as f64
-        }
-        let start_timestamp = timestamp_msec(&start_time);
-        let end_timestamp = timestamp_msec(&end_time);
-        let response_time: f64 = end_timestamp - start_timestamp;
-
-        // formatting
-        let method = format!("{}", req.method);
-        let url = format!("{}", req.url);
-        let status = res.status
-                        .map(|s| format!("{}", s))
-                        .unwrap_or("<missing status code>".to_string());
-        let response_time = format!("{} ms", response_time);
-        let remote_addr = format!("{}", req.remote_addr);
-        let request_time = format!("{}", start_time.format("%Y-%m-%dT%H:%M:%S.%fZ%z"));
-        info!(self.logger,
-              "{} {} {} ({}), {} {}",
-              method,
-              url,
-              status,
-              response_time,
-              remote_addr,
-              request_time);
+    fn log(&self, start_time: DateTime<Local>, end_time: DateTime<Local>, req: &mut Request, res: &Response) {
+        let context = FormatContext {
+            req,
+            res,
+            start_time,
+            end_time,
+        };
+        info!(self.logger, "{}", context);
     }
 }
 
 impl<H: Handler> Handler for LoggerMiddleware<H> {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
         let start_time = chrono::Local::now();
-        match self.handler.handle(req) {
+        let result = self.handler.handle(req);
+        let end_time = chrono::Local::now();
+
+        match result {
             Ok(res) => {
-                self.log(start_time, req, &res);
+                self.log(start_time, end_time, req, &res);
                 Ok(res)
             }
             Err(err) => {
-                self.log(start_time, req, &err.response);
+                self.log(start_time, end_time, req, &err.response);
                 Err(err)
             }
         }
