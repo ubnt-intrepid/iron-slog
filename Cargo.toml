@@ -1,0 +1,12 @@
+[package]
+name = "iron-slog"
+version = "0.0.0"
+authors = ["Yusuke Sasaki <yusuke.sasaki.nuem@gmail.com>"]
+
+[dependencies]
+slog = "^2.0"
+slog-term = "^2.0"
+slog-async = "^2.0"
+
+iron = "*"
+chrono = "*"
