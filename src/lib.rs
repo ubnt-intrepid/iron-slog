@@ -3,71 +3,53 @@ extern crate slog;
 extern crate chrono;
 extern crate iron;
 
+mod format;
+pub use format::{LogContext, LogFormatter, DefaultLogFormatter};
+
 use std::fmt;
 use iron::{Request, Response, IronResult, Handler};
 use slog::Logger;
 use chrono::{DateTime, Local};
 
 
-fn timestamp_msec(t: &chrono::DateTime<chrono::Local>) -> f64 {
-    t.timestamp() as f64 * 1000f64 + t.timestamp_subsec_millis() as f64
-}
-
-fn calc_elapsed_ms(start: &DateTime<Local>, end: &DateTime<Local>) -> f64 {
-    let start_timestamp = timestamp_msec(start);
-    let end_timestamp = timestamp_msec(end);
-    end_timestamp - start_timestamp
-}
-
-
-struct FormatContext<'req, 'res, 'a: 'req, 'b: 'a> {
+struct Format<'req, 'res, 'a: 'req, 'b: 'a, 'f, F: ?Sized + LogFormatter> {
     req: &'req Request<'a, 'b>,
     res: &'res Response,
     start_time: DateTime<Local>,
     end_time: DateTime<Local>,
+    f: &'f F,
 }
 
-impl<'req, 'res, 'a: 'req, 'b: 'a> fmt::Display for FormatContext<'req, 'res, 'a, 'b> {
+impl<'req, 'res, 'a: 'req, 'b: 'a, 'f, F: LogFormatter> fmt::Display for Format<'req, 'res, 'a, 'b, 'f, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let response_time = calc_elapsed_ms(&self.start_time, &self.end_time);
-        let status = self.res
-                         .status
-                         .map(|s| format!("{}", s))
-                         .unwrap_or("<missing status code>".to_string());
-        write!(f,
-               "{} {} {} ms ({}), {} {}",
-               self.req.method,
-               self.req.url,
-               status,
-               response_time,
-               self.req.remote_addr,
-               self.start_time.format("%Y-%m-%dT%H:%M:%S.%fZ%z"))
+        let context = LogContext {
+            req: &self.req,
+            res: &self.res,
+            start_time: &self.start_time,
+            end_time: &self.end_time,
+        };
+        self.f.format(f, &context)
     }
 }
 
 
-pub struct LoggerMiddleware<H: Handler> {
+pub struct LoggerMiddleware<H: Handler, F: LogFormatter> {
+    formatter: F,
     handler: H,
     logger: Logger,
 }
 
-impl<H: Handler> LoggerMiddleware<H> {
-    pub fn new(handler: H, logger: Logger) -> Self {
-        LoggerMiddleware { handler, logger }
-    }
-
-    fn log(&self, start_time: DateTime<Local>, end_time: DateTime<Local>, req: &mut Request, res: &Response) {
-        let context = FormatContext {
-            req,
-            res,
-            start_time,
-            end_time,
-        };
-        info!(self.logger, "{}", context);
+impl<H: Handler, F: LogFormatter> LoggerMiddleware<H, F> {
+    pub fn new(handler: H, logger: Logger, formatter: F) -> Self {
+        LoggerMiddleware {
+            handler,
+            logger,
+            formatter,
+        }
     }
 }
 
-impl<H: Handler> Handler for LoggerMiddleware<H> {
+impl<H: Handler, F: LogFormatter> Handler for LoggerMiddleware<H, F> {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
         let start_time = chrono::Local::now();
         let result = self.handler.handle(req);
@@ -75,11 +57,29 @@ impl<H: Handler> Handler for LoggerMiddleware<H> {
 
         match result {
             Ok(res) => {
-                self.log(start_time, end_time, req, &res);
+                {
+                    let f = Format {
+                        req,
+                        res: &res,
+                        start_time,
+                        end_time,
+                        f: &self.formatter,
+                    };
+                    info!(self.logger, "{}", f);
+                }
                 Ok(res)
             }
             Err(err) => {
-                self.log(start_time, end_time, req, &err.response);
+                {
+                    let f = Format {
+                        req,
+                        res: &err.response,
+                        start_time,
+                        end_time,
+                        f: &self.formatter,
+                    };
+                    error!(self.logger, "{}", f);
+                }
                 Err(err)
             }
         }

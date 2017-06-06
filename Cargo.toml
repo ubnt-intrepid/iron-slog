@@ -5,8 +5,10 @@ authors = ["Yusuke Sasaki <yusuke.sasaki.nuem@gmail.com>"]
 
 [dependencies]
 slog = "^2.0"
+iron = "^0.5"
+chrono = "^0.3"
+
+[dev-dependencies]
 slog-term = "^2.0"
 slog-async = "^2.0"
-
-iron = "*"
-chrono = "*"
+router = "0.5.1"
