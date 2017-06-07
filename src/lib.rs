@@ -1,3 +1,9 @@
+//!
+//! Logger middleware for Iron framework, with slog-rs
+//!
+
+#![deny(missing_docs, warnings)]
+
 #[macro_use]
 extern crate slog;
 extern crate chrono;
@@ -24,6 +30,7 @@ impl<'req, 'res, 'a: 'req, 'b: 'a, 's, 'e, 'f, F: ?Sized + LogFormatter> fmt::Di
 }
 
 
+/// Middleware for logging information of request and response, to certain logger.
 pub struct LoggerMiddleware<H: Handler, F: LogFormatter> {
     formatter: F,
     handler: H,
@@ -31,6 +38,14 @@ pub struct LoggerMiddleware<H: Handler, F: LogFormatter> {
 }
 
 impl<H: Handler, F: LogFormatter> LoggerMiddleware<H, F> {
+    /// Create a `LoggerMiddleware` middleware with specified `logger` and `formatter`.
+    ///
+    /// ```ignore
+    /// let handler = create_your_handler();
+    /// let logger: slog::Logger = create_your_logger();
+    /// let formatter = DefaultLogFormatter;
+    /// let logged_handler = LoggerHandler::new(handler, logger, formatter);
+    /// ```
     pub fn new(handler: H, logger: Logger, formatter: F) -> Self {
         LoggerMiddleware {
             handler,
