@@ -9,26 +9,17 @@ pub use format::{LogContext, LogFormatter, DefaultLogFormatter};
 use std::fmt;
 use iron::{Request, Response, IronResult, Handler};
 use slog::Logger;
-use chrono::{DateTime, Local};
 
 
-struct Format<'req, 'res, 'a: 'req, 'b: 'a, 'f, F: ?Sized + LogFormatter> {
-    req: &'req Request<'a, 'b>,
-    res: &'res Response,
-    start_time: DateTime<Local>,
-    end_time: DateTime<Local>,
-    f: &'f F,
+struct Format<'req, 'res, 'a: 'req, 'b: 'a, 's, 'e, 'f, F: ?Sized + LogFormatter> {
+    context: LogContext<'req, 'res, 'a, 'b, 's, 'e>,
+    formatter: &'f F,
 }
 
-impl<'req, 'res, 'a: 'req, 'b: 'a, 'f, F: LogFormatter> fmt::Display for Format<'req, 'res, 'a, 'b, 'f, F> {
+impl<'req, 'res, 'a: 'req, 'b: 'a, 's, 'e, 'f, F: ?Sized + LogFormatter> fmt::Display
+    for Format<'req, 'res, 'a, 'b, 's, 'e, 'f, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let context = LogContext {
-            req: &self.req,
-            res: &self.res,
-            start_time: &self.start_time,
-            end_time: &self.end_time,
-        };
-        self.f.format(f, &context)
+        self.formatter.format(f, &self.context)
     }
 }
 
@@ -57,29 +48,31 @@ impl<H: Handler, F: LogFormatter> Handler for LoggerMiddleware<H, F> {
 
         match result {
             Ok(res) => {
-                {
-                    let f = Format {
-                        req,
-                        res: &res,
-                        start_time,
-                        end_time,
-                        f: &self.formatter,
-                    };
-                    info!(self.logger, "{}", f);
-                }
+                info!(self.logger,
+                      "{}",
+                      Format {
+                          context: LogContext {
+                              req,
+                              res: &res,
+                              start_time: &start_time,
+                              end_time: &end_time,
+                          },
+                          formatter: &self.formatter,
+                      });
                 Ok(res)
             }
             Err(err) => {
-                {
-                    let f = Format {
-                        req,
-                        res: &err.response,
-                        start_time,
-                        end_time,
-                        f: &self.formatter,
-                    };
-                    error!(self.logger, "{}", f);
-                }
+                error!(self.logger,
+                       "{}",
+                       Format {
+                           context: LogContext {
+                               req,
+                               res: &err.response,
+                               start_time: &start_time,
+                               end_time: &end_time,
+                           },
+                           formatter: &self.formatter,
+                       });
                 Err(err)
             }
         }
