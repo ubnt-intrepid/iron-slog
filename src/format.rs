@@ -1,6 +1,6 @@
 use iron::{Request, Response};
 use std::fmt;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Duration, Local};
 
 #[derive(Debug)]
 pub struct LogContext<'req, 'res, 'a: 'req, 'b: 'a, 's, 'e> {
@@ -8,6 +8,12 @@ pub struct LogContext<'req, 'res, 'a: 'req, 'b: 'a, 's, 'e> {
     pub res: &'res Response,
     pub start_time: &'s DateTime<Local>,
     pub end_time: &'e DateTime<Local>,
+}
+
+impl<'req, 'res, 'a: 'req, 'b: 'a, 's, 'e> LogContext<'req, 'res, 'a, 'b, 's, 'e> {
+    pub fn response_time(&self) -> Duration {
+        self.end_time.signed_duration_since(self.start_time.clone())
+    }
 }
 
 
@@ -34,19 +40,7 @@ impl LogFormatter for DefaultLogFormatter {
             Some(status) => write!(f, "{} ", status)?,
             None => write!(f, "<missing status code>")?,
         }
-        let response_time = calc_elapsed_ms(&ctx.start_time, &ctx.end_time);
-        write!(f, "({} ms)", response_time)?;
+        write!(f, "({} ms)", ctx.response_time().num_milliseconds())?;
         Ok(())
     }
-}
-
-
-fn timestamp_msec(t: &DateTime<Local>) -> f64 {
-    t.timestamp() as f64 * 1000f64 + t.timestamp_subsec_millis() as f64
-}
-
-fn calc_elapsed_ms(start: &DateTime<Local>, end: &DateTime<Local>) -> f64 {
-    let start_timestamp = timestamp_msec(start);
-    let end_timestamp = timestamp_msec(end);
-    end_timestamp - start_timestamp
 }
