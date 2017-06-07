@@ -1,7 +1,11 @@
 [package]
 name = "iron-slog"
-version = "0.0.0"
+description = "Logging Middleware for Iron framework, with slog-rs"
+version = "0.0.1"
 authors = ["Yusuke Sasaki <yusuke.sasaki.nuem@gmail.com>"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/ubnt-intrepid/iron-slog.git"
+documentation = "https://docs.rs/iron-slog"
 
 [dependencies]
 slog = "^2.0"
