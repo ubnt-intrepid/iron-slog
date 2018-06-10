@@ -9,10 +9,10 @@ documentation = "https://docs.rs/iron-slog"
 
 [dependencies]
 slog = "^2.0"
-iron = "^0.5"
+iron = "~0.6"
 chrono = "^0.3"
 
 [dev-dependencies]
 slog-term = "^2.0"
 slog-async = "^2.0"
-router = "0.5.1"
+router = "0.6"
