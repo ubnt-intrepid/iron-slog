@@ -44,7 +44,7 @@ impl<H: Handler, F: LogFormatter> LoggerMiddleware<H, F> {
     /// let handler = create_your_handler();
     /// let logger: slog::Logger = create_your_logger();
     /// let formatter = DefaultLogFormatter;
-    /// let logged_handler = LoggerHandler::new(handler, logger, formatter);
+    /// let logged_handler = LoggerMiddleware::new(handler, logger, formatter);
     /// ```
     pub fn new(handler: H, logger: Logger, formatter: F) -> Self {
         LoggerMiddleware {
